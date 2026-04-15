@@ -89,3 +89,6 @@ venv
 venv.bak/
 venv/
 wheels/
+
+# Test artifacts: tests/test_conversions.py writes output to ./test.kml
+/test.kml

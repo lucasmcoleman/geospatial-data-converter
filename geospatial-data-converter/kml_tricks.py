@@ -46,14 +46,18 @@ def parse_descriptions_to_geodf(geodf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
         except IndexError:
             temp_df = parsed_html[0].T
 
-        # Set DataFrame header and remove the first row
-        temp_df.columns = temp_df.iloc[0]
+        # Set DataFrame header and remove the first row. Force string column
+        # names so downstream consumers (pyarrow, shapefile writers, etc.)
+        # don't choke on numeric labels coming from HTML-parsed description
+        # tables.
+        temp_df.columns = [str(c) for c in temp_df.iloc[0]]
         temp_df = temp_df.iloc[1:]
 
         dataframes.append(temp_df)
 
     # Combine all DataFrames
     combined_df = pd.concat(dataframes, ignore_index=True)
+    combined_df.columns = combined_df.columns.astype(str)
 
     # Add geometry data
     combined_df["geometry"] = geodf["geometry"]
