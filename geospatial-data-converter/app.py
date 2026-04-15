@@ -42,7 +42,7 @@ st.text_input(
 st.file_uploader(
     "Choose a geospatial file",
     key="uploaded_file",
-    type=["kml", "kmz", "geojson", "zip"],
+    type=["kml", "kmz", "geojson", "json", "zip", "wkt"],
 )
 
 

@@ -1,0 +1,22 @@
+{
+  "geometryType": "esriGeometryPoint",
+  "spatialReference": {"wkid": 4326},
+  "fields": [
+    {"name": "name", "type": "esriFieldTypeString"},
+    {"name": "id", "type": "esriFieldTypeInteger"}
+  ],
+  "features": [
+    {
+      "attributes": {"name": "Alpha", "id": 1},
+      "geometry": {"x": -120.52, "y": 38.64, "spatialReference": {"wkid": 4326}}
+    },
+    {
+      "attributes": {"name": "Bravo", "id": 2},
+      "geometry": {"x": -120.53, "y": 38.65, "spatialReference": {"wkid": 4326}}
+    },
+    {
+      "attributes": {"name": "Charlie", "id": 3},
+      "geometry": {"x": -120.54, "y": 38.66, "spatialReference": {"wkid": 4326}}
+    }
+  ]
+}

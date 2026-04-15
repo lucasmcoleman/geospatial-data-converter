@@ -2,7 +2,7 @@ import os
 import pytest
 from utils import convert, read_file, output_format_dict
 
-input_exts = ["kml", "kmz", "geojson", "zip"]
+input_exts = ["kml", "kmz", "geojson", "json", "zip", "wkt"]
 output_exts = output_format_dict.keys()
 
 
