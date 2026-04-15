@@ -39,8 +39,8 @@ This project showcases a simple geospatial data converter using [Streamlit](http
 - User-friendly interface for easy data conversion
 - Supports conversion from the following input formats:
   - ArcGIS featurelayer URL
-  - Uploaded file: KML, KMZ, GeoJSON, ZIP, etc
-- Provides data in the selected output format
+  - Uploaded file: KML, KMZ, GeoJSON, Esri Feature JSON (.json), WKT, ZIP (shapefile or file geodatabase), etc
+- Provides data in the selected output format (CSV, KML, GeoJSON, TopoJSON, WKT, EsriJSON, ESRI Shapefile, OpenFileGDB)
 - Presents data preview (geometry omitted for display purposes)
 - Download button for the converted data
 

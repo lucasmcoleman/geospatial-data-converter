@@ -21,8 +21,22 @@ def parse_descriptions_to_geodf(geodf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
 
     dataframes = []
 
+    # The description column has been lowercased ("description") since GDAL 3.8;
+    # older versions used "Description". Support both to stay compatible.
+    description_col = next(
+        (col for col in ("Description", "description") if col in geodf.columns),
+        None,
+    )
+    if description_col is None:
+        raise KeyError(
+            "Expected a 'Description' or 'description' column in the KML data",
+        )
+
     # Iterate over descriptions and extract data
-    for desc in geodf["Description"]:
+    for desc in geodf[description_col]:
+        if desc is None or (isinstance(desc, float) and pd.isna(desc)):
+            dataframes.append(pd.DataFrame())
+            continue
         desc_as_io = StringIO(desc)
 
         # Try to read the description into a DataFrame

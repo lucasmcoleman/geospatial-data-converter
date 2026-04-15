@@ -1,9 +1,20 @@
 import io
+import json
 import os
 import zipfile
 import geopandas as gpd
+import pandas as pd
 import topojson
 
+from shapely import wkt as shapely_wkt
+from shapely.geometry import (
+    LineString,
+    MultiLineString,
+    MultiPoint,
+    MultiPolygon,
+    Point,
+    Polygon,
+)
 from tempfile import TemporaryDirectory
 from typing import BinaryIO
 from kml_tricks import load_ge_data
@@ -13,9 +24,161 @@ output_format_dict = {
     "KML": ("kml", "kml", "application/vnd.google-earth.kml+xml"),
     "GeoJSON": ("geojson", "geojson", "application/geo+json"),
     "TopoJSON": ("topojson", "topojson", "application/json"),
+    "WKT": ("wkt", "wkt", "text/plain"),
+    "EsriJSON": ("json", "json", "application/json"),
     "ESRI Shapefile": ("shp", "zip", "application/zip"),  # must be zipped
     "OpenFileGDB": ("gdb", "zip", "application/zip"),  # must be zipped
 }
+
+
+_ESRI_GEOMETRY_TYPES = {
+    "Point": "esriGeometryPoint",
+    "MultiPoint": "esriGeometryMultipoint",
+    "LineString": "esriGeometryPolyline",
+    "MultiLineString": "esriGeometryPolyline",
+    "Polygon": "esriGeometryPolygon",
+    "MultiPolygon": "esriGeometryPolygon",
+}
+
+
+def _shapely_to_esri_geometry(geom, sr: dict) -> dict:
+    """Convert a shapely geometry to an Esri JSON geometry dict."""
+    if geom is None:
+        return None
+    if isinstance(geom, Point):
+        return {"x": geom.x, "y": geom.y, "spatialReference": sr}
+    if isinstance(geom, MultiPoint):
+        return {
+            "points": [[pt.x, pt.y] for pt in geom.geoms],
+            "spatialReference": sr,
+        }
+    if isinstance(geom, LineString):
+        return {"paths": [list(map(list, geom.coords))], "spatialReference": sr}
+    if isinstance(geom, MultiLineString):
+        return {
+            "paths": [list(map(list, line.coords)) for line in geom.geoms],
+            "spatialReference": sr,
+        }
+    if isinstance(geom, Polygon):
+        rings = [list(map(list, geom.exterior.coords))]
+        rings.extend(list(map(list, ring.coords)) for ring in geom.interiors)
+        return {"rings": rings, "spatialReference": sr}
+    if isinstance(geom, MultiPolygon):
+        rings = []
+        for poly in geom.geoms:
+            rings.append(list(map(list, poly.exterior.coords)))
+            rings.extend(list(map(list, ring.coords)) for ring in poly.interiors)
+        return {"rings": rings, "spatialReference": sr}
+    raise ValueError(f"Unsupported geometry type for EsriJSON: {geom.geom_type}")
+
+
+def gdf_to_esrijson(gdf: gpd.GeoDataFrame) -> str:
+    """Serialize a GeoDataFrame to an Esri Feature JSON (FeatureSet) string."""
+    wkid = None
+    if gdf.crs is not None:
+        try:
+            wkid = gdf.crs.to_epsg()
+        except Exception:
+            wkid = None
+    sr = {"wkid": wkid} if wkid else {"wkid": 4326}
+
+    geom_type = None
+    for g in gdf.geometry:
+        if g is not None:
+            geom_type = _ESRI_GEOMETRY_TYPES.get(g.geom_type)
+            break
+
+    features = []
+    attrs_df = gdf.drop(columns=[gdf.geometry.name])
+    for geom, (_, row) in zip(gdf.geometry, attrs_df.iterrows()):
+        attributes = {}
+        for col, val in row.items():
+            if pd.isna(val):
+                attributes[col] = None
+            elif hasattr(val, "item"):
+                attributes[col] = val.item()
+            else:
+                attributes[col] = val
+        features.append(
+            {
+                "attributes": attributes,
+                "geometry": _shapely_to_esri_geometry(geom, sr),
+            },
+        )
+
+    feature_set = {
+        "geometryType": geom_type,
+        "spatialReference": sr,
+        "features": features,
+    }
+    return json.dumps(feature_set, default=str)
+
+
+def read_wkt(file: BinaryIO) -> gpd.GeoDataFrame:
+    """Read a WKT file and return a GeoDataFrame.
+
+    The file is expected to contain one WKT geometry per line. Blank lines
+    and lines starting with '#' are ignored. The resulting GeoDataFrame uses
+    EPSG:4326 as its CRS.
+    """
+    content = file.read()
+    if isinstance(content, bytes):
+        content = content.decode("utf-8")
+
+    geometries = []
+    for line in content.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        geometries.append(shapely_wkt.loads(stripped))
+
+    return gpd.GeoDataFrame(geometry=geometries, crs="EPSG:4326")
+
+
+def _esri_geometry_to_shapely(geom: dict):
+    """Convert an Esri JSON geometry dict to a shapely geometry."""
+    if geom is None:
+        return None
+    if "x" in geom and "y" in geom:
+        return Point(geom["x"], geom["y"])
+    if "points" in geom:
+        return MultiPoint(geom["points"])
+    if "paths" in geom:
+        paths = geom["paths"]
+        if len(paths) == 1:
+            return LineString(paths[0])
+        return MultiLineString(paths)
+    if "rings" in geom:
+        rings = [[(pt[0], pt[1]) for pt in ring] for ring in geom["rings"]]
+        polygons = []
+        for ring in rings:
+            shell = Polygon(ring)
+            if polygons and not shell.exterior.is_ccw:
+                # Inner ring of previous polygon
+                outer = polygons[-1]
+                polygons[-1] = Polygon(outer.exterior.coords, list(outer.interiors) + [ring])
+            else:
+                polygons.append(shell)
+        if len(polygons) == 1:
+            return polygons[0]
+        return MultiPolygon(polygons)
+    raise ValueError(f"Unrecognized Esri JSON geometry: {list(geom)}")
+
+
+def read_esrijson(feature_set: dict) -> gpd.GeoDataFrame:
+    """Convert a parsed Esri Feature JSON dict to a GeoDataFrame."""
+    features = feature_set.get("features", [])
+    sr = feature_set.get("spatialReference") or {}
+    wkid = sr.get("latestWkid") or sr.get("wkid") or 4326
+    crs = f"EPSG:{wkid}"
+
+    records = []
+    geometries = []
+    for feat in features:
+        records.append(feat.get("attributes") or {})
+        geometries.append(_esri_geometry_to_shapely(feat.get("geometry")))
+
+    return gpd.GeoDataFrame(records, geometry=geometries, crs=crs)
 
 
 def read_file(file: BinaryIO, *args, **kwargs) -> gpd.GeoDataFrame:
@@ -39,6 +202,33 @@ def read_file(file: BinaryIO, *args, **kwargs) -> gpd.GeoDataFrame:
             with open(tmp_file_path, "wb") as tmp_file:
                 tmp_file.write(file.read())
             return load_ge_data(tmp_file_path)
+    elif ext == "wkt":
+        return read_wkt(file)
+    elif ext in ("json", "geojson"):
+        # Handle both GeoJSON and Esri Feature JSON (as produced by ArcGIS REST).
+        data = file.read()
+        try:
+            parsed = json.loads(data)
+        except (ValueError, TypeError):
+            parsed = None
+        if isinstance(parsed, dict) and (
+            "features" in parsed
+            and parsed.get("features")
+            and isinstance(parsed["features"][0], dict)
+            and "attributes" in parsed["features"][0]
+        ):
+            return read_esrijson(parsed)
+        # Fall back to pyogrio for GeoJSON and other JSON-based formats.
+        with TemporaryDirectory() as tmp_dir:
+            tmp_file_path = os.path.join(tmp_dir, f"{basename}.{ext}")
+            with open(tmp_file_path, "wb") as tmp_file:
+                tmp_file.write(data)
+            return gpd.read_file(
+                tmp_file_path,
+                *args,
+                engine="pyogrio",
+                **kwargs,
+            )
     return gpd.read_file(file, *args, engine="pyogrio", **kwargs)
 
 
@@ -67,6 +257,16 @@ def convert(gdf: gpd.GeoDataFrame, output_name: str, output_format: str) -> byte
         elif output_format == "TopoJSON":
             topojson_data = topojson.Topology(gdf)
             topojson_data.to_json(out_path)
+        elif output_format == "WKT":
+            with open(out_path, "w", encoding="utf-8") as wkt_file:
+                wkt_file.write(
+                    "\n".join(
+                        "" if geom is None else geom.wkt for geom in gdf.geometry
+                    ),
+                )
+        elif output_format == "EsriJSON":
+            with open(out_path, "w", encoding="utf-8") as esri_file:
+                esri_file.write(gdf_to_esrijson(gdf))
         else:
             gdf.to_file(out_path, driver=output_format, engine="pyogrio")
 
