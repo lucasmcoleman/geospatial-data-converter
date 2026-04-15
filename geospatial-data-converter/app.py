@@ -236,11 +236,18 @@ else:
         with attr_tab:
             geom_name = gdf.geometry.name
             display_df = gdf.drop(columns=[geom_name])
-            st.dataframe(
-                display_df,
-                use_container_width=True,
-                height=400,
-            )
+            # PyArrow (used by st.dataframe) chokes on non-string column
+            # labels, so coerce to str for display.
+            display_df = display_df.rename(columns=str)
+            try:
+                st.dataframe(
+                    display_df,
+                    use_container_width=True,
+                    height=400,
+                )
+            except Exception as exc:
+                st.warning(f"Unable to render attribute table ({exc}).")
+                st.dataframe(display_df.astype(str), use_container_width=True)
 
         with map_tab:
             try:
