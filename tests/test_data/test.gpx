@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="geospatial-data-converter tests"
+     xmlns="http://www.topografix.com/GPX/1/1">
+  <wpt lat="38.64" lon="-120.52"><name>Alpha</name></wpt>
+  <wpt lat="38.65" lon="-120.53"><name>Bravo</name></wpt>
+  <wpt lat="38.66" lon="-120.54"><name>Charlie</name></wpt>
+</gpx>
