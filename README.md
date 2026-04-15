@@ -1,5 +1,5 @@
 ---
-title: geospatial-data-converter
+title: Geospatial Data Converter
 emoji: 🌎
 colorFrom: green
 colorTo: blue
@@ -9,7 +9,7 @@ pinned: true
 tags: [geospatial, streamlit, docker]
 ---
 
-# geospatial-data-converter
+# Geospatial Data Converter
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![python](https://img.shields.io/badge/Python-3.11-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org)

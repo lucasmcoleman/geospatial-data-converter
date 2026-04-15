@@ -1,15 +1,18 @@
 import asyncio
+import json
+import math
 import os
 
 import geopandas as gpd
-import pandas as pd
+import pydeck as pdk
 import streamlit as st
 from aiohttp import ClientSession
 from restgdf import FeatureLayer
 
 from utils import read_file, convert, output_format_dict
 
-__version__ = "1.0.2"
+__version__ = "1.1.0"
+APP_NAME = "Geospatial Data Converter"
 
 
 INPUT_FORMAT_HELP = (
@@ -48,7 +51,7 @@ st_init_null(
 
 # --- Page config ---
 st.set_page_config(
-    page_title=f"geospatial-data-converter v{__version__}",
+    page_title=f"{APP_NAME} v{__version__}",
     page_icon="🌎",
     layout="wide",
 )
@@ -145,7 +148,7 @@ if load_clicked:
 
 
 # --- Main area ---
-st.title("🌎 geospatial-data-converter")
+st.title(f"🌎 {APP_NAME}")
 st.caption(f"v{__version__} — convert between common geospatial formats")
 
 if st.session_state.load_error:
@@ -254,13 +257,54 @@ else:
                 map_gdf = gdf
                 if map_gdf.crs is not None and map_gdf.crs.to_epsg() != 4326:
                     map_gdf = map_gdf.to_crs(4326)
-                centroids = map_gdf.geometry.representative_point()
-                points_df = pd.DataFrame(
-                    {"lat": centroids.y, "lon": centroids.x},
-                ).dropna()
-                if len(points_df):
-                    st.map(points_df, latitude="lat", longitude="lon")
-                else:
+                map_gdf = map_gdf[
+                    map_gdf.geometry.notna() & ~map_gdf.geometry.is_empty
+                ]
+
+                if len(map_gdf) == 0:
                     st.info("No geometries available to preview.")
+                else:
+                    # Build a GeoJSON with geometry only — avoids serialising
+                    # attribute columns that may contain non-JSON-safe types.
+                    geom_only = gpd.GeoDataFrame(
+                        geometry=map_gdf.geometry,
+                        crs=map_gdf.crs,
+                    )
+                    geojson = json.loads(geom_only.to_json())
+
+                    minx, miny, maxx, maxy = map_gdf.total_bounds
+                    center_lon = float((minx + maxx) / 2)
+                    center_lat = float((miny + maxy) / 2)
+                    span = max(maxx - minx, maxy - miny, 1e-4)
+                    zoom = max(0.0, min(18.0, math.log2(360.0 / span) - 1.0))
+
+                    layer = pdk.Layer(
+                        "GeoJsonLayer",
+                        data=geojson,
+                        pickable=False,
+                        stroked=True,
+                        filled=True,
+                        extruded=False,
+                        get_fill_color=[255, 140, 0, 120],
+                        get_line_color=[200, 30, 0, 220],
+                        get_line_width=2,
+                        line_width_min_pixels=1,
+                        point_radius_min_pixels=4,
+                        get_point_radius=40,
+                    )
+
+                    view_state = pdk.ViewState(
+                        longitude=center_lon,
+                        latitude=center_lat,
+                        zoom=float(zoom),
+                    )
+
+                    st.pydeck_chart(
+                        pdk.Deck(
+                            layers=[layer],
+                            initial_view_state=view_state,
+                            map_style=pdk.map_styles.LIGHT,
+                        ),
+                    )
             except Exception as exc:
                 st.info(f"Unable to render map preview ({exc}).")
