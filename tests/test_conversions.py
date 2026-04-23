@@ -9,9 +9,9 @@ output_exts = output_format_dict.keys()
 # converter): GPX can't represent polygons, and TopoJSON's serializer
 # doesn't handle the datetime fields GPX waypoints emit.
 INCOMPATIBLE = {
-    ("kml", "GPX"),       # test.kml contains polygons
-    ("geojson", "GPX"),   # test.geojson contains polygons
-    ("zip", "GPX"),       # test.zip is a shapefile of polygons
+    ("kml", "GPX"),  # test.kml contains polygons
+    ("geojson", "GPX"),  # test.geojson contains polygons
+    ("zip", "GPX"),  # test.zip is a shapefile of polygons
     ("gpx", "TopoJSON"),  # GPX waypoint datetime columns break topojson
 }
 

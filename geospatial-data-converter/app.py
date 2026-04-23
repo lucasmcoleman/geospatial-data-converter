@@ -202,9 +202,7 @@ def _render_map_preview(gdf: gpd.GeoDataFrame) -> None:
         map_gdf = gdf
         if map_gdf.crs is not None and map_gdf.crs.to_epsg() != 4326:
             map_gdf = map_gdf.to_crs(4326)
-        map_gdf = map_gdf[
-            map_gdf.geometry.notna() & ~map_gdf.geometry.is_empty
-        ]
+        map_gdf = map_gdf[map_gdf.geometry.notna() & ~map_gdf.geometry.is_empty]
 
         if len(map_gdf) == 0:
             st.info("No geometries available to preview.")
@@ -251,13 +249,9 @@ def _render_map_preview(gdf: gpd.GeoDataFrame) -> None:
 
         # Build a tooltip template from up to 6 non-geometry columns.
         tooltip = None
-        attr_cols = [
-            c for c in map_gdf.columns if c != map_gdf.geometry.name
-        ][:6]
+        attr_cols = [c for c in map_gdf.columns if c != map_gdf.geometry.name][:6]
         if attr_cols:
-            rows = "".join(
-                f"<div><b>{c}:</b> {{{c}}}</div>" for c in attr_cols
-            )
+            rows = "".join(f"<div><b>{c}:</b> {{{c}}}</div>" for c in attr_cols)
             tooltip = {
                 "html": rows,
                 "style": {
@@ -299,12 +293,15 @@ with st.sidebar:
     arcgis_url = ""
     wkt_text = ""
     if source == "Upload file(s)":
-        uploaded_files = st.file_uploader(
-            "Geospatial file(s)",
-            type=["kml", "kmz", "geojson", "json", "zip", "wkt", "gpx"],
-            help=INPUT_FORMAT_HELP,
-            accept_multiple_files=True,
-        ) or []
+        uploaded_files = (
+            st.file_uploader(
+                "Geospatial file(s)",
+                type=["kml", "kmz", "geojson", "json", "zip", "wkt", "gpx"],
+                help=INPUT_FORMAT_HELP,
+                accept_multiple_files=True,
+            )
+            or []
+        )
     elif source == "ArcGIS feature layer URL":
         arcgis_url = st.text_input(
             "Feature layer URL",
@@ -355,16 +352,12 @@ if load_clicked:
                 with st.spinner("Parsing WKT…"):
                     gdf = read_wkt_text(wkt_text)
                 if len(gdf) == 0:
-                    st.session_state.load_error = (
-                        "No valid WKT geometries were parsed."
-                    )
+                    st.session_state.load_error = "No valid WKT geometries were parsed."
                 else:
                     new_datasets.append({"name": "wkt_input", "gdf": gdf})
         else:  # Upload file(s)
             if not uploaded_files:
-                st.session_state.load_error = (
-                    "Choose one or more files before loading."
-                )
+                st.session_state.load_error = "Choose one or more files before loading."
             else:
                 for uf in uploaded_files:
                     with st.spinner(f"Reading {uf.name}…"):
@@ -426,7 +419,7 @@ elif len(datasets) == 1:
                 + ", ".join(f"{t} ({n:,})" for t, n in geom_types.items()),
             )
     except Exception:
-        pass
+        pass  # nosec B110
 
     st.divider()
 
@@ -439,7 +432,9 @@ elif len(datasets) == 1:
         if st.button("Convert", type="primary", use_container_width=True):
             try:
                 target_crs = _resolve_target_crs(
-                    choices["crs_choice"], choices["custom_epsg"], gdf,
+                    choices["crs_choice"],
+                    choices["custom_epsg"],
+                    gdf,
                 )
                 transformed = _transform_gdf(
                     gdf,
@@ -447,7 +442,9 @@ elif len(datasets) == 1:
                     columns=choices["selected_cols"],
                     fix_invalid=choices["fix_invalid"],
                 )
-                file_ext, dl_ext, mimetype = output_format_dict[choices["output_format"]]
+                file_ext, dl_ext, mimetype = output_format_dict[
+                    choices["output_format"]
+                ]
                 output_fn = f"{fn}.{file_ext}"
                 dl_fn = f"{fn}.{dl_ext}"
                 with st.spinner(f"Converting to {choices['output_format']}…"):
@@ -525,11 +522,15 @@ else:
         )
         # Column selection doesn't apply in batch (schemas may differ).
         choices = _render_convert_controls(
-            datasets[0]["gdf"], allow_columns=False, key_prefix="batch",
+            datasets[0]["gdf"],
+            allow_columns=False,
+            key_prefix="batch",
         )
 
         if st.button(
-            "Convert all", type="primary", use_container_width=True,
+            "Convert all",
+            type="primary",
+            use_container_width=True,
         ):
             try:
                 output_format = choices["output_format"]
@@ -537,7 +538,9 @@ else:
 
                 batch_buffer = io.BytesIO()
                 with zipfile.ZipFile(
-                    batch_buffer, "w", zipfile.ZIP_DEFLATED,
+                    batch_buffer,
+                    "w",
+                    zipfile.ZIP_DEFLATED,
                 ) as outer_zip:
                     for ds in datasets:
                         name = ds["name"]

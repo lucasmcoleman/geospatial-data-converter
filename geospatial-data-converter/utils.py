@@ -149,7 +149,7 @@ def read_gpx(file_path: str) -> gpd.GeoDataFrame:
         try:
             gdf = gpd.read_file(file_path, layer=layer, engine="pyogrio")
         except Exception:
-            continue
+            continue  # nosec B112
         if len(gdf) > 0:
             return gdf
     # Fall back to driver default
@@ -237,7 +237,9 @@ def _esri_geometry_to_shapely(geom: dict):
             if polygons and not shell.exterior.is_ccw:
                 # Inner ring of previous polygon
                 outer = polygons[-1]
-                polygons[-1] = Polygon(outer.exterior.coords, list(outer.interiors) + [ring])
+                polygons[-1] = Polygon(
+                    outer.exterior.coords, list(outer.interiors) + [ring]
+                )
             else:
                 polygons.append(shell)
         if len(polygons) == 1:
